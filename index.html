@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CDP - 房間預約系統</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    body { background-color: #f8fafc; color: #1e293b; padding-bottom: 40px; }
+    header { background-color: #4338ca; color: white; padding: 16px; text-align: center; font-weight: bold; font-size: 18px; shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .container { max-width: 800px; margin: 20px auto; padding: 0 16px; }
+    .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+    h2 { font-size: 16px; font-weight: 700; margin-bottom: 12px; color: #0f172a; }
+    .room-selector { display: flex; gap: 12px; margin-bottom: 16px; }
+    .room-btn { flex: 1; padding: 12px; border: 2px solid #cbd5e1; border-radius: 8px; background: white; cursor: pointer; font-weight: bold; text-align: center; }
+    .room-btn.active { border-color: #4338ca; background-color: #e0e7ff; color: #3730a3; }
+    .input-group { margin-bottom: 14px; }
+    label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #475569; }
+    input { width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; outline: none; }
+    input:focus { border-color: #4338ca; }
+    .slots-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); gap: 8px; margin-top: 10px; }
+    .slot-btn { padding: 10px 6px; border: 1px solid #cbd5e1; border-radius: 6px; background: white; cursor: pointer; font-size: 12px; text-align: center; font-weight: 500; }
+    .slot-btn.selected { background-color: #4338ca; color: white; border-color: #4338ca; }
+    .slot-btn.disabled { background-color: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: not-allowed; }
+    .submit-btn { width: 100%; padding: 12px; background-color: #4338ca; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    .submit-btn:hover { background-color: #3730a3; }
+    .nav-tabs { display: flex; gap: 8px; margin-bottom: 16px; justify-content: center; }
+    .tab-btn { padding: 8px 16px; border-radius: 20px; border: none; background: #e2e8f0; font-weight: 600; cursor: pointer; font-size: 13px; }
+    .tab-btn.active { background: #4338ca; color: white; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <header>CDP 場地預約系統</header>
+
+  <div class="container">
+    <div class="nav-tabs">
+      <button class="tab-btn active" id="tab-booking-btn" onclick="switchTab('booking')">預約場地</button>
+      <button class="tab-btn" id="tab-admin-btn" onclick="switchTab('admin')">管理員控制台</button>
+    </div>
+
+    <!-- 預約區塊 -->
+    <div id="sec-booking">
+      <div class="card">
+        <h2>1. 選擇場地與日期</h2>
+        <div class="room-selector">
+          <div class="room-btn active" id="room-hall" onclick="selectRoom('大廳')">大廳 (Main Hall)</div>
+          <div class="room-btn" id="room-room" onclick="selectRoom('活動室')">活動室 (Activity Room)</div>
+        </div>
+        <div class="input-group">
+          <label>選擇日期</label>
+          <input type="date" id="booking-date" onchange="renderSlots()">
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>2. 選擇時段 (可多選)</h2>
+        <div class="slots-grid" id="slots-container"></div>
+      </div>
+
+      <div class="card">
+        <h2>3. 填寫資料</h2>
+        <div class="input-group">
+          <label>姓名 *</label>
+          <input type="text" id="app-name" placeholder="例如：張大明">
+        </div>
+        <div class="input-group">
+          <label>電話 *</label>
+          <input type="tel" id="app-phone" placeholder="例如：91234567">
+        </div>
+        <div class="input-group">
+          <label>機構/團體</label>
+          <input type="text" id="app-org" placeholder="例如：個人 / 社區義工隊">
+        </div>
+        <div class="input-group">
+          <label>用途 *</label>
+          <input type="text" id="app-purpose" placeholder="例如：會議 / 練習">
+        </div>
+        <button class="submit-btn" onclick="submitBooking()">提交預約並同步至雲端</button>
+      </div>
+    </div>
+
+    <!-- 管理員區塊 -->
+    <div id="sec-admin" class="hidden">
+      <div class="card" id="admin-login-box">
+        <h2>管理員登入</h2>
+        <div class="input-group">
+          <input type="password" id="admin-pass" placeholder="請輸入密碼">
+        </div>
+        <button class="submit-btn" onclick="loginAdmin()">解鎖後台</button>
+      </div>
+
+      <div class="card hidden" id="admin-content">
+        <h2>預約紀錄概況</h2>
+        <button class="submit-btn" style="background:#059669; margin-bottom:12px;" onclick="loadData()">刷新雲端資料</button>
+        <div id="admin-list" style="font-size:13px; line-height:1.6;"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx6KI_EVMFCTJFQyxzBaeSySdJ9wDZny0jK0FYDdxiruvaXmlzqRd639l5kIC5sCrSwuw/exec";
+    const SLOTS = ["09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00", "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "17:00-18:00"];
+    
+    let currentRoom = "大廳";
+    let selectedSlots = [];
+    let cloudBookings = [];
+
+    function selectRoom(room) {
+      currentRoom = room;
+      document.getElementById('room-hall').classList.toggle('active', room === '大廳');
+      document.getElementById('room-room').classList.toggle('active', room === '活動室');
+      selectedSlots = [];
+      renderSlots();
+    }
+
+    function switchTab(tab) {
+      document.getElementById('sec-booking').classList.toggle('hidden', tab !== 'booking');
+      document.getElementById('sec-admin').classList.toggle('hidden', tab !== 'admin');
+      document.getElementById('tab-booking-btn').classList.toggle('active', tab === 'booking');
+      document.getElementById('tab-admin-btn').classList.toggle('active', tab === 'admin');
+    }
+
+    function renderSlots() {
+      const dateVal = document.getElementById('booking-date').value;
+      const container = document.getElementById('slots-container');
+      container.innerHTML = '';
+
+      if (!dateVal)
