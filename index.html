@@ -7,7 +7,7 @@
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
     body { background-color: #f8fafc; color: #1e293b; padding-bottom: 40px; }
-    header { background-color: #4338ca; color: white; padding: 16px; text-align: center; font-weight: bold; font-size: 18px; shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    header { background-color: #4338ca; color: white; padding: 16px; text-align: center; font-weight: bold; font-size: 18px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
     .container { max-width: 800px; margin: 20px auto; padding: 0 16px; }
     .card { background: white; border-radius: 12px; padding: 20px; margin-bottom: 20px; border: 1px solid #e2e8f0; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
     h2 { font-size: 16px; font-weight: 700; margin-bottom: 12px; color: #0f172a; }
@@ -24,6 +24,7 @@
     .slot-btn.disabled { background-color: #f1f5f9; color: #94a3b8; border-color: #e2e8f0; cursor: not-allowed; }
     .submit-btn { width: 100%; padding: 12px; background-color: #4338ca; color: white; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; margin-top: 10px; }
     .submit-btn:hover { background-color: #3730a3; }
+    .submit-btn:disabled { background-color: #94a3b8; cursor: wait; }
     .nav-tabs { display: flex; gap: 8px; margin-bottom: 16px; justify-content: center; }
     .tab-btn { padding: 8px 16px; border-radius: 20px; border: none; background: #e2e8f0; font-weight: 600; cursor: pointer; font-size: 13px; }
     .tab-btn.active { background: #4338ca; color: white; }
@@ -77,7 +78,7 @@
           <label>用途 *</label>
           <input type="text" id="app-purpose" placeholder="例如：會議 / 練習">
         </div>
-        <button class="submit-btn" onclick="submitBooking()">提交預約並同步至雲端</button>
+        <button class="submit-btn" id="btn-submit" onclick="submitBooking()">提交預約並同步至雲端</button>
       </div>
     </div>
 
@@ -127,4 +128,135 @@
       const container = document.getElementById('slots-container');
       container.innerHTML = '';
 
-      if (!dateVal)
+      if (!dateVal) return;
+
+      const taken = cloudBookings
+        .filter(b => b.room === currentRoom && b.date === dateVal)
+        .flatMap(b => Array.isArray(b.slots) ? b.slots : String(b.slots||'').split(';'));
+
+      SLOTS.forEach(slot => {
+        const btn = document.createElement('button');
+        const isTaken = taken.includes(slot);
+        const isSelected = selectedSlots.includes(slot);
+
+        btn.className = 'slot-btn' + (isTaken ? ' disabled' : (isSelected ? ' selected' : ''));
+        btn.innerText = slot + (isTaken ? ' (已預約)' : '');
+        btn.disabled = isTaken;
+
+        if (!isTaken) {
+          btn.onclick = () => {
+            if (selectedSlots.includes(slot)) {
+              selectedSlots = selectedSlots.filter(s => s !== slot);
+            } else {
+              selectedSlots.push(slot);
+            }
+            renderSlots();
+          };
+        }
+        container.appendChild(btn);
+      });
+    }
+
+    async function submitBooking() {
+      const date = document.getElementById('booking-date').value;
+      const name = document.getElementById('app-name').value.trim();
+      const phone = document.getElementById('app-phone').value.trim();
+      const org = document.getElementById('app-org').value.trim() || "個人";
+      const purpose = document.getElementById('app-purpose').value.trim();
+      const submitBtn = document.getElementById('btn-submit');
+
+      if (!date || selectedSlots.length === 0 || !name || !phone || !purpose) {
+        alert("請填寫所有必填欄位並選擇至少一個時段！");
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.innerText = "提交中...";
+
+      const id = "BK" + Date.now().toString().slice(-6);
+      const slotsStr = selectedSlots.join(';');
+      const createdAt = new Date().toISOString();
+
+      // 使用正式 Form Data 格式發送 POST 請求
+      const formData = new URLSearchParams();
+      formData.append('id', id);
+      formData.append('room', currentRoom);
+      formData.append('date', date);
+      formData.append('slots', slotsStr);
+      formData.append('name', name);
+      formData.append('phone', phone);
+      formData.append('org', org);
+      formData.append('purpose', purpose);
+      formData.append('createdAt', createdAt);
+
+      try {
+        await fetch(SCRIPT_URL, {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: formData
+        });
+
+        alert("預約已成功提交至雲端！");
+
+        cloudBookings.push({ id, room: currentRoom, date, slots: selectedSlots, name, phone, org, purpose, createdAt });
+        selectedSlots = [];
+        document.getElementById('app-name').value = '';
+        document.getElementById('app-phone').value = '';
+        document.getElementById('app-purpose').value = '';
+        renderSlots();
+
+        setTimeout(loadData, 1500);
+      } catch (err) {
+        alert("提交失敗，請檢查網路連線或稍後再試。");
+        console.error(err);
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.innerText = "提交預約並同步至雲端";
+      }
+    }
+
+    function loginAdmin() {
+      const pass = document.getElementById('admin-pass').value;
+      if (pass === "21277272") {
+        document.getElementById('admin-login-box').classList.add('hidden');
+        document.getElementById('admin-content').classList.remove('hidden');
+        loadData();
+      } else {
+        alert("密碼不正確");
+      }
+    }
+
+    function loadData() {
+      fetch(SCRIPT_URL)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            cloudBookings = data;
+            renderSlots();
+            const listDiv = document.getElementById('admin-list');
+            if (data.length === 0) {
+              listDiv.innerHTML = "<p style='color:#94a3b8;'>目前無任何預約紀錄</p>";
+            } else {
+              listDiv.innerHTML = data.map(b => `
+                <div style="padding:10px; border-bottom:1px solid #eee; margin-bottom:6px;">
+                  <b>${b.room}</b> | <span style="color:#4338ca; font-weight:bold;">${b.date}</span> (${Array.isArray(b.slots)?b.slots.join(', '):b.slots})<br>
+                  申請人：<b>${b.name}</b> (${b.phone}) - ${b.org}<br>
+                  用途：${b.purpose}
+                </div>
+              `).join('');
+            }
+          }
+        })
+        .catch(err => console.error("雲端讀取失敗:", err));
+    }
+
+    window.onload = () => {
+      const today = new Date().toISOString().split('T')[0];
+      document.getElementById('booking-date').value = today;
+      document.getElementById('booking-date').min = today;
+      loadData();
+    };
+  </script>
+</body>
+</html>
