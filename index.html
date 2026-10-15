@@ -1,0 +1,1027 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CDP - 房間預約系統</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    }
+    .custom-scrollbar::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    .custom-scrollbar::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    .custom-scrollbar::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 3px;
+    }
+    @media print {
+      .no-print { display: none !important; }
+      .print-only { display: block !important; }
+      body { background: white; color: black; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-indigo-700 text-white shadow-md sticky top-0 z-30 no-print">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex items-center justify-between h-16">
+        <div class="flex items-center space-x-3">
+          <div class="p-2 bg-indigo-600 rounded-lg">
+            <i data-lucide="building-2" class="w-6 h-6 text-indigo-100"></i>
+          </div>
+          <div>
+            <h1 class="font-bold text-lg leading-tight">CDP</h1>
+            <p class="text-xs text-indigo-200">場地預約與管理系統 (雲端即時同步)</p>
+          </div>
+        </div>
+        
+        <!-- Desktop Navigation Tabs -->
+        <nav class="hidden md:flex space-x-1">
+          <button id="tab-btn-booking" onclick="switchTab('booking')" class="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors bg-indigo-800 text-white shadow-inner">
+            <i data-lucide="calendar-plus" class="w-4 h-4"></i>
+            <span>場地預約</span>
+          </button>
+          <button id="tab-btn-lookup" onclick="switchTab('lookup')" class="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm text-indigo-100 hover:bg-indigo-600 transition-colors">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            <span>預約查詢</span>
+          </button>
+          <button id="tab-btn-admin" onclick="switchTab('admin')" class="flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm text-indigo-100 hover:bg-indigo-600 transition-colors">
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
+            <span>管理員控制台</span>
+          </button>
+        </nav>
+      </div>
+    </div>
+  </header>
+
+  <!-- Mobile Navigation Bar -->
+  <div class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 z-30 flex justify-around p-2 shadow-lg no-print">
+    <button onclick="switchTab('booking')" id="mobile-tab-booking" class="flex flex-col items-center p-2 text-indigo-600 font-semibold">
+      <i data-lucide="calendar-plus" class="w-5 h-5"></i>
+      <span class="text-xs mt-1 font-medium">預約場地</span>
+    </button>
+    <button onclick="switchTab('lookup')" id="mobile-tab-lookup" class="flex flex-col items-center p-2 text-slate-500">
+      <i data-lucide="search" class="w-5 h-5"></i>
+      <span class="text-xs mt-1 font-medium">查詢預約</span>
+    </button>
+    <button onclick="switchTab('admin')" id="mobile-tab-admin" class="flex flex-col items-center p-2 text-slate-500">
+      <i data-lucide="shield-check" class="w-5 h-5"></i>
+      <span class="text-xs mt-1 font-medium">管理後台</span>
+    </button>
+  </div>
+
+  <!-- Loading Overlay -->
+  <div id="sync-loading" class="fixed inset-0 bg-slate-900/40 backdrop-blur-xs z-50 flex flex-col items-center justify-center text-white space-y-3 hidden">
+    <div class="w-10 h-10 border-4 border-white border-t-transparent rounded-full animate-spin"></div>
+    <p class="text-sm font-medium">正在同步至 Google Sheets 雲端資料庫...</p>
+  </div>
+
+  <!-- Main Content Container -->
+  <main class="flex-grow max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 mb-16 md:mb-0">
+    
+    <!-- 1. BOOKING SECTION -->
+    <section id="section-booking" class="space-y-6">
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 mb-2">
+          <i data-lucide="calendar" class="w-5 h-5 text-indigo-600"></i>
+          選擇預約場地與日期
+        </h2>
+        <p class="text-sm text-slate-500 mb-6">請選擇欲租用的房間、日期及可供預約的時間段。</p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div id="room-card-hall" onclick="selectRoom('大廳')" class="cursor-pointer p-5 rounded-xl border-2 border-indigo-600 bg-indigo-50/50 transition-all flex items-start gap-4 hover:shadow-md">
+            <div class="p-3 bg-indigo-600 text-white rounded-lg">
+              <i data-lucide="landmark" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-grow">
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">大廳 (Main Hall)</h3>
+                <span id="badge-hall" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-600 text-white">已選擇</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">適用於大型講座、社區聚會、典禮等活動。</p>
+            </div>
+          </div>
+
+          <div id="room-card-room" onclick="selectRoom('活動室')" class="cursor-pointer p-5 rounded-xl border-2 border-slate-200 bg-white transition-all flex items-start gap-4 hover:shadow-md">
+            <div class="p-3 bg-slate-100 text-slate-600 rounded-lg">
+              <i data-lucide="users" class="w-6 h-6"></i>
+            </div>
+            <div class="flex-grow">
+              <div class="flex justify-between items-center">
+                <h3 class="font-bold text-slate-800 text-lg">活動室 (Activity Room)</h3>
+                <span id="badge-room" class="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 hidden">點擊選擇</span>
+              </div>
+              <p class="text-xs text-slate-500 mt-1">適用於小組會議、工作坊、興趣小組等活動。</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-slate-100">
+          <label class="block text-sm font-semibold text-slate-700 mb-2 flex items-center gap-2">
+            <i data-lucide="calendar-days" class="w-4 h-4 text-indigo-600"></i>
+            選擇日期
+          </label>
+          <input type="date" id="booking-date" onchange="renderTimeSlots()" class="w-full sm:w-64 p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-slate-800">
+        </div>
+      </div>
+
+      <!-- Time Slots Grid -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-slate-800 text-md flex items-center gap-2">
+            <i data-lucide="clock" class="w-5 h-5 text-indigo-600"></i>
+            選擇可預約時段 (可多選)
+          </h3>
+          <button onclick="fetchCloudData()" class="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1 font-semibold">
+            <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i> 重新整理狀態
+          </button>
+        </div>
+
+        <div id="time-slots-container" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3"></div>
+      </div>
+
+      <!-- Contact Info Form -->
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+        <h3 class="font-bold text-slate-800 text-md flex items-center gap-2 mb-4">
+          <i data-lucide="user-check" class="w-5 h-5 text-indigo-600"></i>
+          填寫申請人資料 (免登入)
+        </h3>
+
+        <form id="booking-form" onsubmit="handleBookingSubmit(event)" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">申請人姓名 <span class="text-red-500">*</span></label>
+            <input type="text" id="applicant-name" required placeholder="例如：張大明" class="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">聯絡電話 <span class="text-red-500">*</span></label>
+            <input type="tel" id="applicant-phone" required placeholder="例如：91234567" class="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">團體/機構名稱 (選填)</label>
+            <input type="text" id="applicant-org" placeholder="例如：社區義工隊 / 個人" class="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-600 mb-1">活動用途摘要 <span class="text-red-500">*</span></label>
+            <input type="text" id="applicant-purpose" required placeholder="例如：社區聚會、合唱團練習" class="w-full p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+          </div>
+
+          <div class="md:col-span-2 pt-2">
+            <button type="submit" class="w-full py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl shadow-md transition-colors flex items-center justify-center gap-2 text-base">
+              <i data-lucide="check-circle-2" class="w-5 h-5"></i>
+              確認提交預約 (同步至雲端)
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+
+    <!-- 2. LOOKUP SECTION -->
+    <section id="section-lookup" class="space-y-6 hidden">
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+        <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2 mb-2">
+          <i data-lucide="search" class="w-5 h-5 text-indigo-600"></i>
+          查詢個人預約紀錄
+        </h2>
+        <p class="text-sm text-slate-500 mb-6">請輸入登記時填寫的聯絡電話號碼查詢您的預約詳情。</p>
+
+        <div class="flex flex-col sm:flex-row gap-3">
+          <input type="tel" id="lookup-phone" placeholder="請輸入聯絡電話..." class="flex-grow p-3 border border-slate-300 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none text-sm">
+          <button onclick="performLookup()" class="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors flex items-center justify-center gap-2">
+            <i data-lucide="search" class="w-4 h-4"></i>
+            搜尋紀錄
+          </button>
+        </div>
+      </div>
+
+      <div id="lookup-results" class="space-y-4"></div>
+    </section>
+
+    <!-- 3. ADMIN SECTION -->
+    <section id="section-admin" class="space-y-6 hidden">
+      
+      <!-- Admin Login Box -->
+      <div id="admin-login-box" class="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-lg border border-slate-200 text-center space-y-4">
+        <div class="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center mx-auto">
+          <i data-lucide="lock" class="w-6 h-6"></i>
+        </div>
+        <h2 class="text-xl font-bold text-slate-800">系統管理員驗證</h2>
+        <p class="text-xs text-slate-500">請輸入管理密碼以存取預約控制台</p>
+        
+        <div>
+          <input type="password" id="admin-password-input" placeholder="請輸入管理員密碼" class="w-full p-3 border border-slate-300 rounded-xl text-center focus:ring-2 focus:ring-indigo-500 outline-none">
+        </div>
+        <button onclick="verifyAdminPassword()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-xl transition-colors">
+          解鎖進入控制台
+        </button>
+      </div>
+
+      <!-- Admin Panel -->
+      <div id="admin-panel" class="space-y-6 hidden">
+        <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+          <div>
+            <div class="flex items-center gap-2">
+              <i data-lucide="calendar-range" class="w-6 h-6 text-indigo-600"></i>
+              <h2 class="text-xl font-bold text-slate-800">管理員預約控制台</h2>
+              <span class="bg-emerald-100 text-emerald-700 text-xs font-semibold px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                <i data-lucide="check" class="w-3 h-3"></i> 已驗證
+              </span>
+            </div>
+            <p class="text-xs text-slate-500 mt-1">即時檢視、月曆查詢、匯出及管理 CDP 大廳與活動室之所有預約紀錄</p>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2 no-print">
+            <button onclick="fetchCloudData()" class="px-3.5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 font-medium text-xs rounded-lg transition-colors flex items-center gap-1.5 border border-indigo-200">
+              <i data-lucide="refresh-cw" class="w-4 h-4"></i> 重新載入雲端資料
+            </button>
+            <button onclick="exportToCSV()" class="px-3.5 py-2 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-medium text-xs rounded-lg transition-colors flex items-center gap-1.5 border border-emerald-200">
+              <i data-lucide="download" class="w-4 h-4"></i> 匯出 Excel/CSV
+            </button>
+            <button onclick="window.print()" class="px-3.5 py-2 bg-slate-100 text-slate-700 hover:bg-slate-200 font-medium text-xs rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="printer" class="w-4 h-4"></i> 列印預約單
+            </button>
+            <button onclick="lockAdmin()" class="px-3.5 py-2 bg-slate-800 text-white hover:bg-slate-900 font-medium text-xs rounded-lg transition-colors flex items-center gap-1.5">
+              <i data-lucide="log-out" class="w-4 h-4"></i> 鎖定離開
+            </button>
+          </div>
+        </div>
+
+        <!-- Statistics Grid -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+            <p class="text-xs text-slate-500 flex items-center gap-1"><i data-lucide="layers" class="w-3.5 h-3.5"></i> 總預約數量</p>
+            <p id="stat-total" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-indigo-100 bg-indigo-50/20 shadow-sm">
+            <p class="text-xs text-indigo-600 font-medium flex items-center gap-1"><i data-lucide="calendar-check-2" class="w-3.5 h-3.5"></i> 今日預約</p>
+            <p id="stat-today" class="text-2xl font-bold text-indigo-600 mt-1">0</p>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+            <p class="text-xs text-slate-500 flex items-center gap-1"><i data-lucide="landmark" class="w-3.5 h-3.5"></i> 大廳預約</p>
+            <p id="stat-hall" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+          </div>
+          <div class="bg-white p-4 rounded-xl border border-slate-200/80 shadow-sm">
+            <p class="text-xs text-slate-500 flex items-center gap-1"><i data-lucide="users" class="w-3.5 h-3.5"></i> 活動室預約</p>
+            <p id="stat-room" class="text-2xl font-bold text-slate-800 mt-1">0</p>
+          </div>
+        </div>
+
+        <!-- Mode Switcher -->
+        <div class="bg-white p-4 rounded-2xl shadow-sm border border-slate-200/80 space-y-4 no-print">
+          <div class="flex border-b border-slate-200 pb-3 justify-between items-center flex-wrap gap-3">
+            <div class="flex flex-wrap space-x-2 gap-y-2">
+              <button id="view-mode-weekly-btn" onclick="switchAdminViewMode('weekly')" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-indigo-600 text-white">
+                <i data-lucide="calendar-range" class="w-4 h-4"></i> 一星期排程表 (Weekly)
+              </button>
+              <button id="view-mode-timeline-btn" onclick="switchAdminViewMode('timeline')" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200">
+                <i data-lucide="calendar" class="w-4 h-4"></i> 每日排程表 (Daily)
+              </button>
+              <button id="view-mode-list-btn" onclick="switchAdminViewMode('list')" class="px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200">
+                <i data-lucide="list" class="w-4 h-4"></i> 預約紀錄清單
+              </button>
+            </div>
+
+            <div id="weekly-date-picker-box" class="flex items-center gap-2">
+              <button onclick="shiftWeeklyDate(-7)" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 text-xs font-medium flex items-center gap-1"><i data-lucide="chevron-left" class="w-4 h-4"></i> 上一週</button>
+              <button onclick="resetWeeklyToToday()" class="px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-semibold">本週</button>
+              <button onclick="shiftWeeklyDate(7)" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 text-xs font-medium flex items-center gap-1">下一週 <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            </div>
+
+            <div id="timeline-date-picker-box" class="flex items-center gap-2 hidden">
+              <button onclick="shiftTimelineDate(-1)" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 text-xs font-medium flex items-center gap-1"><i data-lucide="chevron-left" class="w-4 h-4"></i> 上一天</button>
+              <input type="date" id="admin-timeline-date" onchange="renderAdminTimeline()" class="p-1.5 border border-slate-300 rounded-lg text-xs font-medium text-slate-800">
+              <button onclick="shiftTimelineDate(1)" class="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg text-slate-600 text-xs font-medium flex items-center gap-1">下一天 <i data-lucide="chevron-right" class="w-4 h-4"></i></button>
+            </div>
+          </div>
+
+          <div id="list-filters-box" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 hidden">
+            <div class="relative">
+              <i data-lucide="search" class="w-4 h-4 absolute left-3 top-3 text-slate-400"></i>
+              <input type="text" id="admin-search-input" oninput="renderAdminBookingsList()" placeholder="搜尋姓名、電話、機構..." class="w-full pl-9 pr-3 py-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <div>
+              <select id="admin-room-filter" onchange="renderAdminBookingsList()" class="w-full p-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="ALL">所有房間 (大廳及活動室)</option>
+                <option value="大廳">大廳</option>
+                <option value="活動室">活動室</option>
+              </select>
+            </div>
+
+            <div>
+              <input type="date" id="admin-date-picker" onchange="renderAdminBookingsList()" class="w-full p-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+
+            <div>
+              <select id="admin-date-filter" onchange="renderAdminBookingsList()" class="w-full p-2 border border-slate-300 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500">
+                <option value="ALL">所有日期紀錄</option>
+                <option value="UPCOMING">今日及日後預約</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Weekly View -->
+        <div id="admin-view-weekly" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-slate-800 text-md flex items-center gap-2">
+              <i data-lucide="calendar-days" class="w-5 h-5 text-indigo-600"></i>
+              <span id="weekly-display-date-title">一星期排程總覽</span>
+            </h3>
+            <div class="flex items-center gap-3 text-xs">
+              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-emerald-100 border border-emerald-300"></span> 空閒</span>
+              <span class="flex items-center gap-1"><span class="w-3 h-3 rounded bg-indigo-600"></span> 已預約</span>
+            </div>
+          </div>
+          <div id="weekly-schedule-container" class="space-y-6"></div>
+        </div>
+
+        <!-- Daily View -->
+        <div id="admin-view-timeline" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 hidden">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-slate-800 text-md flex items-center gap-2">
+              <i data-lucide="clock" class="w-5 h-5 text-indigo-600"></i>
+              <span id="timeline-display-date-title">每日時間線狀況</span>
+            </h3>
+          </div>
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full border-collapse min-w-[700px]">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 text-xs border-b border-slate-200">
+                  <th class="p-3 text-left w-28">房間</th>
+                  <th class="p-2 text-center">09:00</th><th class="p-2 text-center">10:00</th><th class="p-2 text-center">11:00</th><th class="p-2 text-center">12:00</th><th class="p-2 text-center">13:00</th><th class="p-2 text-center">14:00</th><th class="p-2 text-center">15:00</th><th class="p-2 text-center">16:00</th><th class="p-2 text-center">17:00</th>
+                </tr>
+              </thead>
+              <tbody id="timeline-table-body" class="divide-y divide-slate-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- List View -->
+        <div id="admin-view-list" class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200/80 hidden">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-slate-800 text-md flex items-center gap-2">
+              <i data-lucide="list-filter" class="w-5 h-5 text-indigo-600"></i> 預約紀錄清單
+            </h3>
+            <span id="filtered-count-badge" class="text-xs text-indigo-600 font-semibold bg-indigo-50 px-2.5 py-1 rounded-full">共 0 項紀錄</span>
+          </div>
+          <div id="admin-bookings-list" class="space-y-3"></div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Success Modal -->
+  <div id="modal-success" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-md w-full p-6 text-center shadow-2xl space-y-4 border border-slate-100">
+      <div class="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
+        <i data-lucide="check-circle" class="w-10 h-10"></i>
+      </div>
+      <h3 class="text-2xl font-bold text-slate-800">預約提交成功！</h3>
+      <p class="text-xs text-slate-500">已同步至 Google Sheets 雲端，您可以隨時憑電話號碼查詢。</p>
+
+      <div id="modal-receipt-content" class="bg-slate-50 p-4 rounded-xl border border-slate-200 text-left text-xs space-y-2 text-slate-700"></div>
+
+      <button onclick="closeSuccessModal()" class="w-full py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold rounded-xl transition-colors">
+        完成並返回
+      </button>
+    </div>
+  </div>
+
+  <!-- Alert Modal -->
+  <div id="modal-alert" class="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+    <div class="bg-white rounded-2xl max-w-sm w-full p-6 text-center shadow-xl space-y-4">
+      <div id="alert-icon-box" class="w-12 h-12 rounded-full flex items-center justify-center mx-auto bg-indigo-100 text-indigo-600">
+        <i data-lucide="info" class="w-6 h-6"></i>
+      </div>
+      <h3 id="alert-title" class="text-lg font-bold text-slate-800">提示</h3>
+      <p id="alert-message" class="text-xs text-slate-600 leading-relaxed"></p>
+      <div id="alert-actions" class="flex gap-2 pt-2">
+        <button id="alert-btn-ok" onclick="closeAlertModal()" class="w-full py-2.5 bg-indigo-600 text-white text-xs font-semibold rounded-xl">確定</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- JavaScript Logic -->
+  <script>
+    const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbx6KI_EVMFCTJFQyxzBaeSySdJ9wDZny0jK0FYDdxiruvaXmlzqRd639l5kIC5sCrSwuw/exec";
+
+    const TIME_SLOTS = [
+      "09:00-10:00", "10:00-11:00", "11:00-12:00", "12:00-13:00",
+      "13:00-14:00", "14:00-15:00", "15:00-16:00", "16:00-17:00", "17:00-18:00"
+    ];
+
+    let currentSelectedRoom = "大廳";
+    let selectedSlots = [];
+    let bookings = [];
+    let isAdminLoggedIn = false;
+    let currentAdminViewMode = "weekly";
+    let weeklyStartDate = new Date();
+
+    function showLoading(show) {
+      document.getElementById('sync-loading').classList.toggle('hidden', !show);
+    }
+
+    // Fetch Cloud Data from Google Sheets
+    async function fetchCloudData() {
+      if (!GOOGLE_SCRIPT_URL) {
+        const stored = localStorage.getItem("ngo_room_bookings");
+        bookings = stored ? JSON.parse(stored) : [];
+        refreshUI();
+        return;
+      }
+
+      showLoading(true);
+      try {
+        const res = await fetch(GOOGLE_SCRIPT_URL);
+        const data = await res.json();
+        if (Array.isArray(data)) {
+          bookings = data;
+          localStorage.setItem("ngo_room_bookings", JSON.stringify(bookings));
+        }
+      } catch (err) {
+        console.error("雲端讀取失敗:", err);
+        const stored = localStorage.getItem("ngo_room_bookings");
+        bookings = stored ? JSON.parse(stored) : [];
+      } finally {
+        showLoading(false);
+        refreshUI();
+      }
+    }
+
+    // Save Data to Cloud using Standard JSON POST
+    async function saveBookingToCloud(newBooking) {
+      showLoading(true);
+      try {
+        if (GOOGLE_SCRIPT_URL) {
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(newBooking)
+          });
+        }
+        bookings.push(newBooking);
+        localStorage.setItem("ngo_room_bookings", JSON.stringify(bookings));
+      } catch (err) {
+        console.error("雲端儲存失敗:", err);
+      } finally {
+        showLoading(false);
+        refreshUI();
+      }
+    }
+
+    // Delete Data from Cloud
+    async function deleteBookingFromCloud(id) {
+      showLoading(true);
+      try {
+        if (GOOGLE_SCRIPT_URL) {
+          await fetch(GOOGLE_SCRIPT_URL, {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'DELETE', id: id })
+          });
+        }
+        bookings = bookings.filter(b => b.id !== id);
+        localStorage.setItem("ngo_room_bookings", JSON.stringify(bookings));
+      } catch (err) {
+        console.error("雲端刪除失敗:", err);
+      } finally {
+        showLoading(false);
+        refreshUI();
+      }
+    }
+
+    function refreshUI() {
+      renderTimeSlots();
+      if (isAdminLoggedIn) {
+        updateAdminStats();
+        renderAdminWeekly();
+        renderAdminTimeline();
+        renderAdminBookingsList();
+      }
+    }
+
+    function getTodayDateString() {
+      return formatDateObj(new Date());
+    }
+
+    function formatDateObj(d) {
+      const yyyy = d.getFullYear();
+      const mm = String(d.getMonth() + 1).padStart(2, '0');
+      const dd = String(d.getDate()).padStart(2, '0');
+      return `${yyyy}-${mm}-${dd}`;
+    }
+
+    function switchTab(tab) {
+      document.getElementById('section-booking').classList.add('hidden');
+      document.getElementById('section-lookup').classList.add('hidden');
+      document.getElementById('section-admin').classList.add('hidden');
+
+      ['booking', 'lookup', 'admin'].forEach(t => {
+        const btn = document.getElementById(`tab-btn-${t}`);
+        if (btn) btn.className = "flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm text-indigo-100 hover:bg-indigo-600 transition-colors";
+        const mBtn = document.getElementById(`mobile-tab-${t}`);
+        if (mBtn) mBtn.className = "flex flex-col items-center p-2 text-slate-500";
+      });
+
+      const activeBtn = document.getElementById(`tab-btn-${tab}`);
+      if (activeBtn) activeBtn.className = "flex items-center space-x-2 px-4 py-2 rounded-lg font-medium text-sm transition-colors bg-indigo-800 text-white shadow-inner";
+
+      const activeMobile = document.getElementById(`mobile-tab-${tab}`);
+      if (activeMobile) activeMobile.className = "flex flex-col items-center p-2 text-indigo-600 font-semibold";
+
+      document.getElementById(`section-${tab}`).classList.remove('hidden');
+
+      if (tab === 'admin' && isAdminLoggedIn) {
+        refreshUI();
+      }
+    }
+
+    function selectRoom(roomName) {
+      currentSelectedRoom = roomName;
+      const hallCard = document.getElementById('room-card-hall');
+      const roomCard = document.getElementById('room-card-room');
+      const badgeHall = document.getElementById('badge-hall');
+      const badgeRoom = document.getElementById('badge-room');
+
+      if (roomName === '大廳') {
+        hallCard.className = "cursor-pointer p-5 rounded-xl border-2 border-indigo-600 bg-indigo-50/50 transition-all flex items-start gap-4 hover:shadow-md";
+        roomCard.className = "cursor-pointer p-5 rounded-xl border-2 border-slate-200 bg-white transition-all flex items-start gap-4 hover:shadow-md";
+        badgeHall.className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-600 text-white";
+        badgeHall.innerText = "已選擇";
+        badgeRoom.className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 hidden";
+      } else {
+        roomCard.className = "cursor-pointer p-5 rounded-xl border-2 border-indigo-600 bg-indigo-50/50 transition-all flex items-start gap-4 hover:shadow-md";
+        hallCard.className = "cursor-pointer p-5 rounded-xl border-2 border-slate-200 bg-white transition-all flex items-start gap-4 hover:shadow-md";
+        badgeRoom.className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-indigo-600 text-white";
+        badgeRoom.innerText = "已選擇";
+        badgeHall.className = "text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-500 hidden";
+      }
+      selectedSlots = [];
+      renderTimeSlots();
+    }
+
+    function isSlotPast(dateStr, slot) {
+      const now = new Date();
+      const todayStr = getTodayDateString();
+      if (dateStr < todayStr) return true;
+      if (dateStr > todayStr) return false;
+      const endHour = parseInt(slot.split('-')[1].split(':')[0], 10);
+      return now.getHours() >= endHour;
+    }
+
+    function renderTimeSlots() {
+      const container = document.getElementById('time-slots-container');
+      container.innerHTML = '';
+      const dateVal = document.getElementById('booking-date').value;
+      if (!dateVal) return;
+
+      const takenSlots = bookings
+        .filter(b => b.room === currentSelectedRoom && b.date === dateVal)
+        .flatMap(b => b.slots);
+
+      TIME_SLOTS.forEach(slot => {
+        const isTaken = takenSlots.includes(slot);
+        const isPast = isSlotPast(dateVal, slot);
+        const isSelected = selectedSlots.includes(slot);
+
+        const slotBtn = document.createElement('button');
+        slotBtn.type = 'button';
+
+        if (isPast) {
+          slotBtn.disabled = true;
+          slotBtn.className = "p-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-medium cursor-not-allowed flex items-center justify-between";
+          slotBtn.innerHTML = `<span>${slot}</span><span class="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">已過期</span>`;
+        } else if (isTaken) {
+          slotBtn.disabled = true;
+          slotBtn.className = "p-3 rounded-xl border border-slate-200 bg-slate-100 text-slate-400 text-xs font-medium cursor-not-allowed flex items-center justify-between";
+          slotBtn.innerHTML = `<span>${slot}</span><span class="text-[10px] bg-slate-200 text-slate-500 px-1.5 py-0.5 rounded">已被預約</span>`;
+        } else if (isSelected) {
+          slotBtn.className = "p-3 rounded-xl border-2 border-indigo-600 bg-indigo-600 text-white text-xs font-semibold shadow-sm flex items-center justify-between";
+          slotBtn.innerHTML = `<span>${slot}</span><i data-lucide="check" class="w-4 h-4"></i>`;
+          slotBtn.onclick = () => toggleSlot(slot);
+        } else {
+          slotBtn.className = "p-3 rounded-xl border border-slate-200 bg-white hover:border-indigo-400 text-slate-700 text-xs font-medium transition-all flex items-center justify-between shadow-sm hover:shadow";
+          slotBtn.innerHTML = `<span>${slot}</span><span class="text-[10px] text-emerald-600 font-semibold bg-emerald-50 px-1.5 py-0.5 rounded">可預約</span>`;
+          slotBtn.onclick = () => toggleSlot(slot);
+        }
+
+        container.appendChild(slotBtn);
+      });
+      lucide.createIcons();
+    }
+
+    function toggleSlot(slot) {
+      if (selectedSlots.includes(slot)) {
+        selectedSlots = selectedSlots.filter(s => s !== slot);
+      } else {
+        selectedSlots.push(slot);
+      }
+      renderTimeSlots();
+    }
+
+    async function handleBookingSubmit(e) {
+      e.preventDefault();
+      const dateVal = document.getElementById('booking-date').value;
+      const name = document.getElementById('applicant-name').value.trim();
+      const phone = document.getElementById('applicant-phone').value.trim();
+      const org = document.getElementById('applicant-org').value.trim() || "個人";
+      const purpose = document.getElementById('applicant-purpose').value.trim();
+
+      if (!dateVal || selectedSlots.length === 0) {
+        showAlertModal("請填寫完整的預約日期與時段");
+        return;
+      }
+
+      const newBooking = {
+        id: "BK" + Date.now().toString().slice(-6),
+        room: currentSelectedRoom,
+        date: dateVal,
+        slots: [...selectedSlots].sort(),
+        name,
+        phone,
+        org,
+        purpose,
+        createdAt: new Date().toISOString()
+      };
+
+      await saveBookingToCloud(newBooking);
+
+      document.getElementById('modal-receipt-content').innerHTML = `
+        <div class="flex justify-between py-1 border-b border-slate-200"><span class="text-slate-500">預約場地：</span><span class="font-bold text-slate-800">${newBooking.room}</span></div>
+        <div class="flex justify-between py-1 border-b border-slate-200"><span class="text-slate-500">預約日期：</span><span class="font-bold text-indigo-600">${newBooking.date}</span></div>
+        <div class="flex justify-between py-1 border-b border-slate-200"><span class="text-slate-500">時段：</span><span class="font-medium text-slate-800">${newBooking.slots.join(', ')}</span></div>
+        <div class="flex justify-between py-1 border-b border-slate-200"><span class="text-slate-500">申請人：</span><span class="font-medium text-slate-800">${newBooking.name} (${newBooking.org})</span></div>
+        <div class="flex justify-between py-1"><span class="text-slate-500">聯絡電話：</span><span class="font-medium text-slate-800">${newBooking.phone}</span></div>
+      `;
+
+      document.getElementById('modal-success').classList.remove('hidden');
+      selectedSlots = [];
+      document.getElementById('booking-form').reset();
+    }
+
+    function closeSuccessModal() {
+      document.getElementById('modal-success').classList.add('hidden');
+    }
+
+    function performLookup() {
+      const phone = document.getElementById('lookup-phone').value.trim();
+      const container = document.getElementById('lookup-results');
+      container.innerHTML = '';
+
+      if (!phone) {
+        container.innerHTML = `<div class="p-4 bg-amber-50 text-amber-700 rounded-xl text-xs">請輸入電話號碼以進行查詢。</div>`;
+        return;
+      }
+
+      const results = bookings.filter(b => b.phone === phone);
+
+      if (results.length === 0) {
+        container.innerHTML = `
+          <div class="bg-white p-8 text-center rounded-2xl border border-slate-200 text-slate-500 space-y-2">
+            <i data-lucide="search-x" class="w-10 h-10 mx-auto text-slate-300"></i>
+            <p class="text-sm font-semibold">找不到相關預約紀錄</p>
+          </div>
+        `;
+      } else {
+        results.forEach(item => {
+          const card = document.createElement('div');
+          card.className = "bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm space-y-2";
+          card.innerHTML = `
+            <div class="flex justify-between items-start">
+              <span class="text-xs font-bold px-2.5 py-0.5 rounded-full ${item.room === '大廳' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}">${item.room}</span>
+              <span class="text-xs font-semibold text-slate-500">${item.date}</span>
+            </div>
+            <div class="text-xs text-slate-700 space-y-1">
+              <p><strong>時段：</strong> ${item.slots.join(', ')}</p>
+              <p><strong>機構：</strong> ${item.org}</p>
+              <p><strong>用途：</strong> ${item.purpose}</p>
+            </div>
+          `;
+          container.appendChild(card);
+        });
+      }
+      lucide.createIcons();
+    }
+
+    function verifyAdminPassword() {
+      const pwd = document.getElementById('admin-password-input').value;
+      if (pwd === "21277272") {
+        isAdminLoggedIn = true;
+        document.getElementById('admin-login-box').classList.add('hidden');
+        document.getElementById('admin-panel').classList.remove('hidden');
+        document.getElementById('admin-timeline-date').value = getTodayDateString();
+        document.getElementById('admin-date-picker').value = getTodayDateString();
+        refreshUI();
+      } else {
+        showAlertModal("管理密碼不正確。");
+      }
+    }
+
+    function lockAdmin() {
+      isAdminLoggedIn = false;
+      document.getElementById('admin-password-input').value = '';
+      document.getElementById('admin-login-box').classList.remove('hidden');
+      document.getElementById('admin-panel').classList.add('hidden');
+    }
+
+    function switchAdminViewMode(mode) {
+      currentAdminViewMode = mode;
+      const weeklyBtn = document.getElementById('view-mode-weekly-btn');
+      const timelineBtn = document.getElementById('view-mode-timeline-btn');
+      const listBtn = document.getElementById('view-mode-list-btn');
+
+      const weeklyView = document.getElementById('admin-view-weekly');
+      const timelineView = document.getElementById('admin-view-timeline');
+      const listView = document.getElementById('admin-view-list');
+
+      const weeklyControls = document.getElementById('weekly-date-picker-box');
+      const timelineControls = document.getElementById('timeline-date-picker-box');
+      const listFiltersBox = document.getElementById('list-filters-box');
+
+      weeklyBtn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200";
+      timelineBtn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200";
+      listBtn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-slate-100 text-slate-600 hover:bg-slate-200";
+
+      weeklyView.classList.add('hidden');
+      timelineView.classList.add('hidden');
+      listView.classList.add('hidden');
+
+      weeklyControls.classList.add('hidden');
+      timelineControls.classList.add('hidden');
+      listFiltersBox.classList.add('hidden');
+
+      if (mode === 'weekly') {
+        weeklyBtn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-indigo-600 text-white";
+        weeklyView.classList.remove('hidden');
+        weeklyControls.classList.remove('hidden');
+        renderAdminWeekly();
+      } else if (mode === 'timeline') {
+        timelineBtn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-indigo-600 text-white";
+        timelineView.classList.remove('hidden');
+        timelineControls.classList.remove('hidden');
+        renderAdminTimeline();
+      } else {
+        listBtn.className = "px-4 py-2 rounded-xl text-xs font-bold transition-colors flex items-center gap-1.5 bg-indigo-600 text-white";
+        listView.classList.remove('hidden');
+        listFiltersBox.classList.remove('hidden');
+        renderAdminBookingsList();
+      }
+    }
+
+    function shiftWeeklyDate(days) {
+      weeklyStartDate.setDate(weeklyStartDate.getDate() + days);
+      renderAdminWeekly();
+    }
+
+    function resetWeeklyToToday() {
+      weeklyStartDate = new Date();
+      renderAdminWeekly();
+    }
+
+    function renderAdminWeekly() {
+      const weekDays = [];
+      const dayNames = ['日', '一', '二', '三', '四', '五', '六'];
+      const start = new Date(weeklyStartDate);
+      for (let i = 0; i < 7; i++) {
+        const d = new Date(start);
+        d.setDate(start.getDate() + i);
+        weekDays.push({
+          dateStr: formatDateObj(d),
+          dayName: `星期${dayNames[d.getDay()]}`,
+          isToday: formatDateObj(d) === getTodayDateString()
+        });
+      }
+
+      document.getElementById('weekly-display-date-title').innerText = `📅 一星期排程總覽 (${weekDays[0].dateStr} 至 ${weekDays[6].dateStr})`;
+
+      const container = document.getElementById('weekly-schedule-container');
+      container.innerHTML = '';
+
+      ["大廳", "活動室"].forEach(room => {
+        const roomBox = document.createElement('div');
+        roomBox.className = "space-y-2";
+        let html = `
+          <div class="flex items-center gap-2 font-bold text-slate-800 text-sm border-b border-slate-200 pb-2">
+            <span class="p-1.5 rounded-lg ${room === '大廳' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}">
+              <i data-lucide="${room === '大廳' ? 'landmark' : 'users'}" class="w-4 h-4"></i>
+            </span>
+            ${room} - 7天預約概況
+          </div>
+          <div class="overflow-x-auto custom-scrollbar">
+            <table class="w-full border-collapse min-w-[850px] border border-slate-200 rounded-xl overflow-hidden text-xs">
+              <thead><tr class="bg-slate-100 text-slate-700 font-semibold border-b border-slate-200"><th class="p-2 text-left w-24">日期</th>`;
+
+        TIME_SLOTS.forEach(slot => { html += `<th class="p-2 text-center">${slot.split('-')[0]}</th>`; });
+        html += `</tr></thead><tbody class="divide-y divide-slate-200 bg-white">`;
+
+        weekDays.forEach(wd => {
+          html += `<tr class="${wd.isToday ? 'bg-indigo-50/40' : ''}">
+            <td class="p-2 font-bold ${wd.isToday ? 'text-indigo-600' : 'text-slate-700'} border-r border-slate-200">
+              <div>${wd.dateStr.slice(5)}</div>
+              <div class="text-[10px] text-slate-400 font-normal">${wd.dayName}</div>
+            </td>`;
+
+          TIME_SLOTS.forEach(slot => {
+            const booking = bookings.find(b => b.room === room && b.date === wd.dateStr && b.slots.includes(slot));
+            if (booking) {
+              html += `<td class="p-1 text-center"><div title="${booking.name} (${booking.org})" class="p-1.5 rounded bg-indigo-600 text-white text-[10px] font-medium leading-tight shadow-sm truncate max-w-[85px] mx-auto">${booking.name}</div></td>`;
+            } else {
+              html += `<td class="p-1 text-center"><div class="p-1.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200/50 text-[10px]">空閒</div></td>`;
+            }
+          });
+          html += `</tr>`;
+        });
+
+        html += `</tbody></table></div>`;
+        roomBox.innerHTML = html;
+        container.appendChild(roomBox);
+      });
+      lucide.createIcons();
+    }
+
+    function shiftTimelineDate(days) {
+      const input = document.getElementById('admin-timeline-date');
+      const curDate = new Date(input.value || getTodayDateString());
+      curDate.setDate(curDate.getDate() + days);
+      input.value = formatDateObj(curDate);
+      renderAdminTimeline();
+    }
+
+    function renderAdminTimeline() {
+      const dateVal = document.getElementById('admin-timeline-date').value || getTodayDateString();
+      document.getElementById('timeline-display-date-title').innerText = `📅 ${dateVal} 時間線排程狀況`;
+
+      const tbody = document.getElementById('timeline-table-body');
+      tbody.innerHTML = '';
+
+      ["大廳", "活動室"].forEach(room => {
+        const row = document.createElement('tr');
+        row.className = "hover:bg-slate-50/50 transition-colors";
+        let rowHtml = `<td class="p-3 font-bold text-xs text-slate-800 border-r border-slate-100">${room}</td>`;
+
+        TIME_SLOTS.forEach(slot => {
+          const booking = bookings.find(b => b.room === room && b.date === dateVal && b.slots.includes(slot));
+          if (booking) {
+            rowHtml += `<td class="p-1.5 text-center"><div class="p-2 rounded-lg bg-indigo-600 text-white text-[10px] font-semibold leading-tight shadow-sm truncate max-w-[90px]"><div>${booking.name}</div><div class="text-[9px] text-indigo-200 truncate">${booking.org}</div></div></td>`;
+          } else {
+            rowHtml += `<td class="p-1.5 text-center"><div class="p-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200/60 text-[10px] font-medium">空閒</div></td>`;
+          }
+        });
+
+        row.innerHTML = rowHtml;
+        tbody.appendChild(row);
+      });
+    }
+
+    function renderAdminBookingsList() {
+      const search = document.getElementById('admin-search-input').value.toLowerCase().trim();
+      const roomFilter = document.getElementById('admin-room-filter').value;
+      const datePicker = document.getElementById('admin-date-picker').value;
+      const dateFilter = document.getElementById('admin-date-filter').value;
+      const today = getTodayDateString();
+
+      let filtered = [...bookings];
+      if (roomFilter !== 'ALL') filtered = filtered.filter(b => b.room === roomFilter);
+      if (datePicker) filtered = filtered.filter(b => b.date === datePicker);
+      else if (dateFilter === 'UPCOMING') filtered = filtered.filter(b => b.date >= today);
+
+      if (search) {
+        filtered = filtered.filter(b => 
+          b.name.toLowerCase().includes(search) ||
+          b.phone.includes(search) ||
+          b.org.toLowerCase().includes(search) ||
+          b.id.toLowerCase().includes(search)
+        );
+      }
+
+      filtered.sort((a, b) => new Date(b.date + 'T' + b.slots[0].split('-')[0]) - new Date(a.date + 'T' + a.slots[0].split('-')[0]));
+      document.getElementById('filtered-count-badge').innerText = `已篩選共 ${filtered.length} 項紀錄`;
+
+      const container = document.getElementById('admin-bookings-list');
+      container.innerHTML = '';
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div class="p-8 text-center text-slate-400 text-xs">無符合條件之預約紀錄</div>`;
+        return;
+      }
+
+      filtered.forEach(item => {
+        const card = document.createElement('div');
+        card.className = "p-4 rounded-xl border border-slate-200 bg-white hover:border-indigo-200 transition-all shadow-sm space-y-2";
+        card.innerHTML = `
+          <div class="flex justify-between items-start flex-wrap gap-2">
+            <div class="flex items-center gap-2">
+              <span class="font-bold text-sm text-slate-800">${item.room}</span>
+              <span class="text-xs text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-semibold flex items-center gap-1">
+                <i data-lucide="calendar" class="w-3 h-3"></i> ${item.date}
+              </span>
+            </div>
+            <div class="flex items-center gap-2 no-print">
+              <a href="tel:${item.phone}" class="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium rounded-lg flex items-center gap-1 transition-colors">
+                <i data-lucide="phone" class="w-3 h-3"></i> 致電
+              </a>
+              <button onclick="confirmDeleteBooking('${item.id}')" class="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 text-xs font-medium rounded-lg transition-colors border border-rose-200">
+                刪除預約
+              </button>
+            </div>
+          </div>
+          <div class="text-xs text-slate-600 grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+            <p><strong class="text-slate-800">時段：</strong> <span class="font-semibold text-indigo-700">${item.slots.join(', ')}</span></p>
+            <p><strong class="text-slate-800">申請人：</strong> ${item.name} (${item.phone}) | <strong>機構：</strong> ${item.org}</p>
+            <p class="md:col-span-2"><strong class="text-slate-800">用途：</strong> ${item.purpose}</p>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+      lucide.createIcons();
+    }
+
+    function updateAdminStats() {
+      const today = getTodayDateString();
+      document.getElementById('stat-total').innerText = bookings.length;
+      document.getElementById('stat-today').innerText = bookings.filter(b => b.date === today).length;
+      document.getElementById('stat-hall').innerText = bookings.filter(b => b.room === '大廳').length;
+      document.getElementById('stat-room').innerText = bookings.filter(b => b.room === '活動室').length;
+    }
+
+    function confirmDeleteBooking(id) {
+      showConfirmModal("確定要從雲端刪除該筆預約紀錄嗎？此動作不可撤銷。", async () => {
+        await deleteBookingFromCloud(id);
+      });
+    }
+
+    function exportToCSV() {
+      if (bookings.length === 0) {
+        showAlertModal("目前無任何預約數據可供匯出。");
+        return;
+      }
+      let csv = "\uFEFF預約編號,房間,預約日期,預約時段,申請人姓名,聯絡電話,機構/團體,活動用途,建立時間\n";
+      bookings.forEach(b => {
+        csv += `"${b.id}","${b.room}","${b.date}","${b.slots.join(';')}","${b.name}","${b.phone}","${b.org}","${b.purpose}","${b.createdAt}"\n`;
+      });
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `CDP_Room_Bookings_${getTodayDateString()}.csv`;
+      link.click();
+    }
+
+    function showAlertModal(msg) {
+      document.getElementById('alert-title').innerText = "提示";
+      document.getElementById('alert-message').innerText = msg;
+      document.getElementById('alert-actions').innerHTML = `<button onclick="closeAlertModal()" class="w-full py-2.5 bg-indigo-600 text-white text-xs font-semibold rounded-xl">確定</button>`;
+      document.getElementById('modal-alert').classList.remove('hidden');
+    }
+
+    function showConfirmModal(msg, onConfirm) {
+      document.getElementById('alert-title').innerText = "確認刪除";
+      document.getElementById('alert-message').innerText = msg;
+      document.getElementById('alert-actions').innerHTML = `
+        <button onclick="closeAlertModal()" class="w-1/2 py-2.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-xl">取消</button>
+        <button id="btn-confirm" class="w-1/2 py-2.5 bg-rose-600 text-white text-xs font-semibold rounded-xl">刪除</button>
+      `;
+      document.getElementById('btn-confirm').onclick = () => {
+        closeAlertModal();
+        onConfirm();
+      };
+      document.getElementById('modal-alert').classList.remove('hidden');
+    }
+
+    function closeAlertModal() {
+      document.getElementById('modal-alert').classList.add('hidden');
+    }
+
+    // 🌟 初始化邏輯（修正日期自動預設與觸發時段渲染）
+    window.onload = () => {
+      const todayStr = getTodayDateString();
+      const dateInput = document.getElementById('booking-date');
+      if (dateInput) {
+        dateInput.value = todayStr;
+        dateInput.min = todayStr;
+      }
+      fetchCloudData();
+      renderTimeSlots(); // 立即渲染當天可選時段
+      lucide.createIcons();
+    };
+  </script>
+</body>
+</html>
